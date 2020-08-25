@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ConfigMap
+data:
+  nginx.conf: |
+    server {
+            listen 8080 default_server;
+
+            listen 8443 ssl;
+
+            root /usr/share/nginx/html;
+            index index.html;
+
+            server_name my-website.com;
+            ssl_certificate /etc/nginx/certs/server.crt;
+            ssl_certificate_key /etc/nginx/certs/server.key;
+
+            location / {
+                    try_files $uri $uri/ =404;
+            }
+    }
+metadata:
+  name: nginxconfigmap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-agent-colin-testing
+  labels:
+    run: vault-agent-colin-testing
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 8443
+    name: https
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+    name: http
+  selector:
+    run: vault-agent-colin-testing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-agent-colin-testing
+spec:
+  selector:
+    matchLabels:
+      run: vault-agent-colin-testing
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: vault-agent-colin-testing
+      annotations:
+        openshift.io/scc: "privileged"
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "vault-agent-auth"
+        vault.hashicorp.com/tls-skip-verify: "true"
+        # Static secrets example
+        vault.hashicorp.com/secret-volume-path-index.html: "/usr/share/nginx/html"
+        vault.hashicorp.com/agent-inject-secret-index.html: "secret/myapp/config"
+        vault.hashicorp.com/agent-inject-template-index.html: |
+          {{ with secret "secret/myapp/config" }}
+          username is {{ .Data.data.username }} / password is {{ .Data.data.password }}
+          {{ end }}
+        # TLS server certificate
+        vault.hashicorp.com/secret-volume-path-server.crt: "/etc/nginx/certs"
+        vault.hashicorp.com/agent-inject-secret-server.crt: "pki/issue/vault-agent"
+        vault.hashicorp.com/agent-inject-template-server.crt: |
+          {{- with secret "pki/issue/vault-agent" "common_name=www.vault-agent.colin.testing" -}}
+          {{ .Data.certificate }}
+          {{- end }}
+        # TLS server key
+        vault.hashicorp.com/secret-volume-path-server.key: "/etc/nginx/certs"
+        vault.hashicorp.com/agent-inject-secret-server.key: "pki/issue/vault-agent"
+        vault.hashicorp.com/agent-inject-template-server.key: |
+          {{- with secret "pki/issue/vault-agent" "common_name=www.vault-agent.colin.testing" -}}
+          {{ .Data.private_key }}
+          {{- end }}
+        # TLS ca certificate
+        vault.hashicorp.com/secret-volume-path-ca.crt: "/etc/nginx/certs"
+        vault.hashicorp.com/agent-inject-secret-ca.crt: "pki/issue/vault-agent"
+        vault.hashicorp.com/agent-inject-template-ca.crt: |
+          {{- with secret "pki/issue/vault-agent" "common_name=www.vault-agent.colin.testing" -}}
+          {{ .Data.issuing_ca }}
+          {{- end }}
+    spec:
+      volumes:
+      - name: configmap-volume
+        configMap:
+          name: nginxconfigmap
+      containers:
+      - name: nginx
+        image: nginxinc/nginx-unprivileged
+        ports:
+          - containerPort: 8443
+          - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /index.html
+            port: 8080
+          initialDelaySeconds: 30
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /etc/nginx/conf.d
+          name: configmap-volume
+      serviceAccountName: vault-agent-auth
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  creationTimestamp: null
+  labels:
+    run: vault-agent-colin-testing
+  name: vault-agent-colin-testing
+spec:
+  host: www.vault-agent.colin.testing
+  port:
+    targetPort: https
+  to:
+    kind: Service
+    name: vault-agent-colin-testing
+    weight: null
+  tls:
+    termination: passthrough
+    insecureEdgeTerminationPolicy: Redirect

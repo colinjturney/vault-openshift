@@ -1,2 +1,2 @@
-# vault-openshift
-A demo of different Vault capabilities working with OpenShift
+# Vault Openshift
+README coming soon...
