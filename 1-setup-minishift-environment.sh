@@ -1,5 +1,7 @@
 #!/bin/sh
 
+eval $(crc oc-env)
+
 #minishift openshift config set --patch '{"MutatingAdmissionWebhook": {"configuration": {"apiVersion": "v1","disable": false,"kind": "DefaultAdmissionConfig"}},"ValidatingAdmissionWebhook": {"configuration": {"apiVersion": "v1","disable": false,"kind": "DefaultAdmissionConfig"}}}'
 
 oc login -u developer -p developer https://api.crc.testing:6443 --insecure-skip-tls-verify

@@ -18,10 +18,24 @@ helm install cert-manager \
 
 oc create serviceaccount cert-manager-auth
 
-sleep 10
+# Only continue to deploy the ClusterIssuer when the cert-manager-webhook pod is running
 
-# If script fails at this point, might need to give it a minute or so before running this below again
-# Will be waiting a while for the cert-manager-webhook pod to be running.
+pod_running=false
+
+while [ ${pod_running} == false ]
+do
+  oc get pods --namespace=cert-manager | grep cert-manager-webhook | grep Running
+
+  if [ $? == 1 ]
+  then
+    pod_running=false
+    echo "cert-manager-webhook pod not yet running. Sleeping for 10 seconds..."
+    sleep 10
+  else
+    echo "cert-manager-webhook pod now running. Deploying ClusterIssuer..."
+    pod_running=true
+  fi
+done
 
 export ISSUER_SECRET_REF=$(oc get serviceaccount cert-manager-auth -o json | jq -r '.secrets[] | select(.name|test(".token.")) | .name')
 export EXTERNAL_VAULT_ADDR=http://$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -n 1):8200
