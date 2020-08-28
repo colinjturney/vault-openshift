@@ -9,6 +9,8 @@ vault secrets enable pki
 
 vault secrets tune -max-lease-ttl=8760h pki
 
+# Configure self-signed root CA on PKI secrets engine.
+
 vault write pki/root/generate/internal \
   common_name=colin.testing \
   ttl=8760h
@@ -16,6 +18,8 @@ vault write pki/root/generate/internal \
 vault write pki/config/urls \
   issuing_certificates="${EXTERNAL_VAULT_ADDR}/v1/pki/ca" \
   crl_distribution_points="${EXTERNAL_VAULT_ADDR}/v1/pki/crl"
+
+# Configure roels for vault-agent and cert-manager to consume certificates from.
 
 vault write pki/roles/vault-agent \
   allowed_domains=*.vault-agent.colin.testing \
