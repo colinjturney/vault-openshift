@@ -1,5 +1,7 @@
 #!/bin/sh
 
+eval $(crc oc-env)
+
 # Install Jetstack's cert-manager 0.14.3 resources
 oc apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.14.3/cert-manager.crds.yaml
 
